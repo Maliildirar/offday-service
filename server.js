@@ -51,8 +51,8 @@ app.get('/api/members', (req, res) => {
 
 // ─── API: Off-day gönder (Üye → Servis) ───
 app.post('/api/submit', (req, res) => {
-  const { person_id, person_name, offdays } = req.body;
-  if (!person_id || !person_name || !Array.isArray(offdays)) {
+  const { person_id, person_name, date } = req.body;
+  if (!person_id || !person_name || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: 'Eksik veya hatalı veri' });
   }
 
@@ -63,13 +63,14 @@ app.post('/api/submit', (req, res) => {
     id: crypto.randomUUID(),
     person_id,
     person_name,
-    offdays,
+    date,
     submitted_at: new Date().toISOString(),
     synced: false,
   };
 
-  const idx = submissions.findIndex(s => s.person_id === person_id);
-  if (idx >= 0) submissions[idx] = submission;
+  // Aynı kişi + tarih kombinasyonu varsa replace, yoksa append (geçmiş haftalar korunur)
+  const existingIdx = submissions.findIndex(s => s.person_id === person_id && s.date === date);
+  if (existingIdx >= 0) submissions[existingIdx] = submission;
   else submissions.push(submission);
 
   saveJson('submissions.json', submissions);
@@ -101,21 +102,53 @@ app.get('/', (req, res) => {
 });
 
 function renderFormPage() {
-  const DAYS = [
-    { value: 1, label: 'Pazartesi' },
-    { value: 2, label: 'Salı' },
-    { value: 3, label: 'Çarşamba' },
-    { value: 4, label: 'Perşembe' },
-    { value: 5, label: 'Cuma' },
-    { value: 6, label: 'Cumartesi' },
-    { value: 0, label: 'Pazar' },
-  ];
+  const DAY_NAMES = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  const MONTH_NAMES = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-  const dayCheckboxes = DAYS.map(d => `
-    <label class="day-label">
-      <input type="radio" name="offday" value="${d.value}" />
-      <span class="day-box">${d.label}</span>
-    </label>`).join('');
+  function getMonday(d) {
+    const r = new Date(d);
+    const day = r.getDay();
+    const diff = r.getDate() - day + (day === 0 ? -6 : 1);
+    r.setDate(diff);
+    r.setHours(0, 0, 0, 0);
+    return r;
+  }
+
+  function fmtIso(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  const today = new Date();
+  const thisMonday = getMonday(today);
+  const nextMonday = new Date(thisMonday); nextMonday.setDate(nextMonday.getDate() + 7);
+
+  function buildWeekHtml(weekStart, label) {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart); d.setDate(d.getDate() + i);
+      days.push({ iso: fmtIso(d), dayName: DAY_NAMES[d.getDay()], dayNum: d.getDate(), monthName: MONTH_NAMES[d.getMonth()] });
+    }
+    const start = days[0]; const end = days[6];
+    const rangeLabel = `${start.dayNum} ${start.monthName} – ${end.dayNum} ${end.monthName}`;
+    const buttons = days.map(d => `
+      <label class="day-label">
+        <input type="radio" name="offday" value="${d.iso}" />
+        <span class="day-box">
+          <span class="day-name">${d.dayName}</span>
+          <span class="day-num">${d.dayNum} ${d.monthName}</span>
+        </span>
+      </label>`).join('');
+    return `
+      <div class="week-section">
+        <div class="week-header">
+          <span class="week-title">${label}</span>
+          <span class="week-range">${rangeLabel}</span>
+        </div>
+        <div class="days-grid">${buttons}</div>
+      </div>`;
+  }
+
+  const dayCheckboxes = buildWeekHtml(thisMonday, 'Bu Hafta') + buildWeekHtml(nextMonday, 'Gelecek Hafta');
 
   return `<!DOCTYPE html>
 <html lang="tr">
@@ -208,6 +241,29 @@ function renderFormPage() {
     select:focus { border-color: var(--primary); }
     option { background: #1a1d27; }
 
+    .week-section {
+      margin-bottom: 16px;
+    }
+    .week-section:last-child {
+      margin-bottom: 0;
+    }
+    .week-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding: 0 2px;
+    }
+    .week-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .week-range {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
     .days-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -218,27 +274,40 @@ function renderFormPage() {
       cursor: pointer;
       user-select: none;
     }
-    .day-label input[type="checkbox"] {
+    .day-label input[type="radio"], .day-label input[type="checkbox"] {
       display: none;
     }
     .day-box {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 44px;
+      gap: 2px;
+      height: 56px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--bg);
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--text-secondary);
       transition: all 0.15s;
+    }
+    .day-box .day-name {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .day-box .day-num {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
     }
     .day-label input:checked + .day-box {
       background: var(--primary-bg);
       border-color: var(--primary);
       color: var(--primary);
-      font-weight: 700;
+    }
+    .day-label input:checked + .day-box .day-num {
+      color: var(--primary);
     }
     .day-label:hover .day-box {
       border-color: var(--primary);
@@ -428,7 +497,7 @@ function renderFormPage() {
       const personName = selectedOpt.dataset.name;
       const checked = document.querySelector('input[name="offday"]:checked');
       if (!checked) { showError('Lütfen bir gün seçin.'); return; }
-      const offdays = [parseInt(checked.value, 10)];
+      const date = checked.value;
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Gönderiliyor...';
@@ -437,13 +506,15 @@ function renderFormPage() {
         const res = await fetch('/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id: personId, person_name: personName, offdays }),
+          body: JSON.stringify({ person_id: personId, person_name: personName, date }),
         });
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || 'Sunucu hatası');
 
         const dayNames = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
-        const dayStr = dayNames[offdays[0]];
+        const monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+        const d = new Date(date + 'T00:00:00');
+        const dayStr = \`\${dayNames[d.getDay()]} \${d.getDate()} \${monthNames[d.getMonth()]}\`;
         successMsg.innerHTML = \`<strong>\${personName}</strong> için off-day bilgisi kaydedildi.<br/>Off-day: \${dayStr}\`;
 
         formBody.style.display = 'none';
