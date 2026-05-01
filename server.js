@@ -113,7 +113,7 @@ function renderFormPage() {
 
   const dayCheckboxes = DAYS.map(d => `
     <label class="day-label">
-      <input type="checkbox" name="offday" value="${d.value}" />
+      <input type="radio" name="offday" value="${d.value}" />
       <span class="day-box">${d.label}</span>
     </label>`).join('');
 
@@ -365,7 +365,7 @@ function renderFormPage() {
         <div class="days-grid">
           ${dayCheckboxes}
         </div>
-        <p class="hint">Hiç seçmezseniz tüm günler çalışır olarak kaydedilir.</p>
+        <p class="hint">Yalnızca bir gün seçebilirsiniz.</p>
       </div>
 
       <div class="divider"></div>
@@ -385,7 +385,7 @@ function renderFormPage() {
     </div>
   </div>
 
-  <div class="footer">YTU Sigma Aeronautics &copy; 2025</div>
+  <div class="footer">YTU Sigma Aeronautics &copy; 2026</div>
 
   <script>
     const selectEl = document.getElementById('person-select');
@@ -426,7 +426,9 @@ function renderFormPage() {
 
       const personId = parseInt(selectEl.value, 10);
       const personName = selectedOpt.dataset.name;
-      const offdays = [...document.querySelectorAll('input[name="offday"]:checked')].map(cb => parseInt(cb.value, 10));
+      const checked = document.querySelector('input[name="offday"]:checked');
+      if (!checked) { showError('Lütfen bir gün seçin.'); return; }
+      const offdays = [parseInt(checked.value, 10)];
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Gönderiliyor...';
@@ -441,7 +443,7 @@ function renderFormPage() {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Sunucu hatası');
 
         const dayNames = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
-        const dayStr = offdays.length > 0 ? offdays.map(d => dayNames[d]).join(', ') : 'Yok (tüm günler çalışır)';
+        const dayStr = dayNames[offdays[0]];
         successMsg.innerHTML = \`<strong>\${personName}</strong> için off-day bilgisi kaydedildi.<br/>Off-day: \${dayStr}\`;
 
         formBody.style.display = 'none';
