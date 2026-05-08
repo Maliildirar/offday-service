@@ -268,6 +268,11 @@ function renderFormPage() {
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+    .days-grid > .day-label:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      justify-self: center;
+      width: calc(50% - 4px);
+    }
 
     .day-label {
       cursor: pointer;
