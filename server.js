@@ -120,7 +120,6 @@ function renderFormPage() {
 
   const today = new Date();
   const thisMonday = getMonday(today);
-  const nextMonday = new Date(thisMonday); nextMonday.setDate(nextMonday.getDate() + 7);
 
   function buildWeekHtml(weekStart, label) {
     const days = [];
@@ -148,7 +147,7 @@ function renderFormPage() {
       </div>`;
   }
 
-  const dayCheckboxes = buildWeekHtml(thisMonday, 'Bu Hafta') + buildWeekHtml(nextMonday, 'Gelecek Hafta');
+  const dayCheckboxes = buildWeekHtml(thisMonday, 'Bu Hafta');
 
   return `<!DOCTYPE html>
 <html lang="tr">
