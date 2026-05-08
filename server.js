@@ -264,14 +264,13 @@ function renderFormPage() {
     }
 
     .days-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
       gap: 8px;
     }
-    .days-grid > .day-label:last-child:nth-child(odd) {
-      grid-column: 1 / -1;
-      justify-self: center;
-      width: calc(50% - 4px);
+    .days-grid > .day-label {
+      flex: 0 0 calc(50% - 4px);
     }
 
     .day-label {
